@@ -41,19 +41,19 @@ class ConvGRU1DCell(nn.Module):
     
     def forward(self, input, hx=None):
         output_size = \
-            ((input.size(-1) - self.conv_ih.kernel_size + 
-              2 * self.conv_ih.padding) / self.conv_ih.stride) + 1
+            int((input.size(-1) - self.conv_ih.kernel_size[0] + 
+                 2 * self.conv_ih.padding[0]) / self.conv_ih.stride[0]) + 1
         if hx is None:
             hx = torch.zeros(input.size(0), self.h_channels, output_size)
         # Run the input->hidden and hidden->hidden convolution kernels
         ih_conv_output = self.conv_ih(input)
-        hh_conv_output = self.conv_ih(hx)
-        z = functional.sigmoid(ih_conv_output[:, :self.h_channels, :] + 
-                               hh_conv_output[:, :self.h_channels, :])
-        r = functional.sigmoid(ih_conv_output[:, self.h_channels:2*self.h_channels, :] + 
-                               hh_conv_output[:, self.h_channels:2*self.h_channels, :])
-        n = functional.tanh(ih_conv_output[:, 2*self.h_channels:, :] + 
-                            r * hh_conv_output[:, 2*self.h_channels:, :])
+        hh_conv_output = self.conv_hh(hx)
+        z = torch.sigmoid(ih_conv_output[:, :self.h_channels, :] + 
+                          hh_conv_output[:, :self.h_channels, :])
+        r = torch.sigmoid(ih_conv_output[:, self.h_channels:2*self.h_channels, :] + 
+                          hh_conv_output[:, self.h_channels:2*self.h_channels, :])
+        n = torch.tanh(ih_conv_output[:, 2*self.h_channels:, :] + 
+                       r * hh_conv_output[:, 2*self.h_channels:, :])
         return (1 - z) * n + z * hx
 
 
