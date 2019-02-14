@@ -9,6 +9,18 @@ class ConvGRU1DCell(nn.Module):
     def __init__(self, input_channels: int, hidden_channels: int, 
                  kernel_size: int, stride: int=1, padding: int=0,
                  recurrent_kernel_size: int=3):
+        """
+        
+        Arguments:
+            input_channels {int} -- [description]
+            hidden_channels {int} -- [description]
+            kernel_size {int} -- [description]
+        
+        Keyword Arguments:
+            stride {int} -- [description] (default: {1})
+            padding {int} -- [description] (default: {0})
+            recurrent_kernel_size {int} -- [description] (default: {3})
+        """
         super(ConvGRU1DCell, self).__init__()
         
         self.conv_ih = nn.Conv1d(input_channels, hidden_channels * 3, 
@@ -43,3 +55,30 @@ class ConvGRU1DCell(nn.Module):
         n = functional.tanh(ih_conv_output[:, 2*self.h_channels:, :] + 
                             r * hh_conv_output[:, 2*self.h_channels:, :])
         return (1 - z) * n + z * hx
+
+
+class ConvGRU1D(nn.Module):
+
+    def __init__(self, nb_layers: int, input_channels: int, hidden_channels: int, 
+                 kernel_size: int, stride: int=1, padding: int=0,
+                 recurrent_kernel_size: int=3, batch_first: bool=False):
+        super(ConvGRU1D, self).__init__()
+
+        self.cell = ConvGRU1DCell(input_channels, hidden_channels, 
+                                  kernel_size, stride, padding,
+                                  recurrent_kernel_size)
+
+        self.nb_layers = nb_layers
+        self.batch_first = batch_first
+
+    def forward(self, input, hx=None):
+        if self.batch_first:
+            input = input.permute(2, 0, 1, 3)
+        output = []
+        for step in range(input.size(0)):
+            hx = self.cell(input[step], hx)
+            output.append(hx)
+        output = torch.cat(output, 0).view(input.size(0), *output[0].size())
+        if self.batch_first:
+            output = output.permute(1, 2, 0, 3)
+        return output, hx
