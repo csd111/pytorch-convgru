@@ -44,7 +44,8 @@ class ConvGRU1DCell(nn.Module):
             int((input.size(-1) - self.conv_ih.kernel_size[0] + 
                  2 * self.conv_ih.padding[0]) / self.conv_ih.stride[0]) + 1
         if hx is None:
-            hx = torch.zeros(input.size(0), self.h_channels, output_size)
+            hx = torch.zeros(input.size(0), self.h_channels, output_size, 
+                             device=input.device)
         # Run the input->hidden and hidden->hidden convolution kernels
         ih_conv_output = self.conv_ih(input)
         hh_conv_output = self.conv_hh(hx)
