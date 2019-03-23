@@ -1,2 +1,2 @@
-# convgru1d
-1D Convolutional Gated Recurrent Unit in pytorch
+# pytorch-convgru
+PyTorch implementations of one- and two-dimensional Convolutional Gated Recurrent Unit cells.

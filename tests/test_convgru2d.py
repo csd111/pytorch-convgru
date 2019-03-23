@@ -1,27 +1,27 @@
 import unittest
 import torch
-from convgru import ConvGRU1DCell
+from convgru import ConvGRU2DCell
 
 
-class ConvGRU1DTest(unittest.TestCase):
+class ConvGRU2DTest(unittest.TestCase):
 
-    def test_convgru1d_cell(self):
+    def test_convgru2d_cell(self):
         # ----------------------------------------------------------------------
         # Data preparation
         # ----------------------------------------------------------------------
         channels = 8
-        kernel_size = 3
-        padding = 1
-        stride = 1
-        data =  1 + torch.randn(10, channels, 128)
-        hidden_state = 2 + torch.randn(10, channels, 128)
-        dirac_weight = torch.zeros(channels, channels, kernel_size)
+        kernel_size = (3, 3)
+        padding = (1, 1)
+        stride = (1, 1)
+        data =  1 + torch.randn(5, channels, 64, 64)
+        hidden_state = 2 + torch.randn(5, channels, 64, 64)
+        dirac_weight = torch.zeros(channels, channels, *kernel_size)
         torch.nn.init.dirac_(dirac_weight)
-        dirac_weight = dirac_weight.repeat(3, 1, 1)
+        dirac_weight = dirac_weight.repeat(3, 1, 1, 1)
         # ----------------------------------------------------------------------
         # Initialize cell to get output=tanh(input) and run it 
         # ----------------------------------------------------------------------
-        cell = ConvGRU1DCell(channels, channels, kernel_size, 
+        cell = ConvGRU2DCell(channels, channels, kernel_size, 
                              stride=stride, padding=padding)
         # Init weights to force z=0 and n=tanh(input)
         cell.conv_ih.weight.data = dirac_weight
@@ -47,33 +47,33 @@ class ConvGRU1DTest(unittest.TestCase):
         output_data = cell(data, hidden_state)
         self.assertIs(bool(torch.all(torch.eq(data, output_data))), False)
 
-    def test_convgru1d_training(self):
+    def test_convgru2d_training(self):
         # ----------------------------------------------------------------------
         # Data preparation
         # ----------------------------------------------------------------------
         channels = 8
-        kernel_size = 3
-        padding = 1
-        stride = 1
+        kernel_size = (3, 3)
+        padding = (1, 1)
+        stride = (1, 1)
+        batch_size = 12
         time_steps = 64
-        batch_size = 10
-        nb_features = 128
-        data =  1 + torch.randn(time_steps, batch_size, channels, nb_features)
+        features = (64, 64)
+        data =  1 + torch.randn(time_steps, batch_size, channels, *features)
         target = torch.tanh(data)
         # ----------------------------------------------------------------------
         # Instantiate model for training
         # ----------------------------------------------------------------------
-        cgru1d = ConvGRU1DCell(channels, channels, kernel_size, 
-                           stride=stride, padding=padding)
-        optimizer = torch.optim.RMSprop(cgru1d.parameters(), 0.005)
+        cgru2d = ConvGRU2DCell(channels, channels, kernel_size, 
+                               stride=stride, padding=padding)
+        optimizer = torch.optim.RMSprop(cgru2d.parameters(), 0.001)
         loss = torch.nn.MSELoss()
-        weights_ih_bf_train = cgru1d.conv_ih.weight.data.clone()
-        weights_hh_bf_train = cgru1d.conv_hh.weight.data.clone()
+        weights_ih_bf_train = cgru2d.conv_ih.weight.data.clone()
+        weights_hh_bf_train = cgru2d.conv_hh.weight.data.clone()
         # ----------------------------------------------------------------------
         # Train the model and check
         # ----------------------------------------------------------------------
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        cgru1d.to(device)
+        cgru2d.to(device)
         for index in range(2000):
             # Reset the gradients
             optimizer.zero_grad()
@@ -82,7 +82,7 @@ class ConvGRU1DTest(unittest.TestCase):
             output = []
             hx = None
             for step in range(data.size(0)):
-                hx = cgru1d(data[step], hx)
+                hx = cgru2d(data[step], hx)
                 output.append(hx)
             # Reshape the output appropriately
             output = torch.cat(output, 0).view(data.size(0), *output[0].size())
@@ -94,8 +94,8 @@ class ConvGRU1DTest(unittest.TestCase):
                 print("Step {0} / 2000 - MSError is {1}".format(index, 
                                                                 error.item()))
         # Make sure the weights have changed
-        weights_ih_af_train = cgru1d.conv_ih.weight.data.cpu().clone()
-        weights_hh_af_train = cgru1d.conv_hh.weight.data.cpu().clone()
+        weights_ih_af_train = cgru2d.conv_ih.weight.data.cpu().clone()
+        weights_hh_af_train = cgru2d.conv_hh.weight.data.cpu().clone()
         self.assertIs(
             bool(torch.all(torch.eq(weights_ih_bf_train, weights_ih_af_train))), 
             False)
