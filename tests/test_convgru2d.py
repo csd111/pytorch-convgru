@@ -55,11 +55,14 @@ class ConvGRU2DTest(unittest.TestCase):
         kernel_size = (3, 3)
         padding = (1, 1)
         stride = (1, 1)
-        batch_size = 12
-        time_steps = 64
-        features = (64, 64)
+        batch_size = 10
+        time_steps = 32
+        features = (32, 32)
         data =  1 + torch.randn(time_steps, batch_size, channels, *features)
+        # Perpare the target
         target = torch.tanh(data)
+        for step in range(1, data.size(0)):
+            target[step] = 0.5 * target[step] + 0.5 * target[step - 1]
         # ----------------------------------------------------------------------
         # Instantiate model for training
         # ----------------------------------------------------------------------
@@ -74,7 +77,8 @@ class ConvGRU2DTest(unittest.TestCase):
         # ----------------------------------------------------------------------
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         cgru2d.to(device)
-        for index in range(2000):
+        # Run a basic training procedure
+        for index in range(1000):
             # Reset the gradients
             optimizer.zero_grad()
             data = data.to(device)
@@ -91,7 +95,7 @@ class ConvGRU2DTest(unittest.TestCase):
             error.backward()
             optimizer.step()
             if index % 100 == 0:
-                print("Step {0} / 2000 - MSError is {1}".format(index, 
+                print("Step {0} / 1000 - MSError is {1}".format(index, 
                                                                 error.item()))
         # Make sure the weights have changed
         weights_ih_af_train = cgru2d.conv_ih.weight.data.cpu().clone()
@@ -102,5 +106,5 @@ class ConvGRU2DTest(unittest.TestCase):
         self.assertIs(
             bool(torch.all(torch.eq(weights_hh_bf_train, weights_hh_af_train))), 
             False)
-        # Check the final error is low
-        self.assertLessEqual(error.item(), 10**(-4))
+        # Check the final error is low enough
+        self.assertLessEqual(error.item(), 5*10**(-2))

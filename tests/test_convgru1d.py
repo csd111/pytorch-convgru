@@ -74,7 +74,8 @@ class ConvGRU1DTest(unittest.TestCase):
         # ----------------------------------------------------------------------
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         cgru1d.to(device)
-        for index in range(2000):
+        # Run a basic training procedure
+        for index in range(1000):
             # Reset the gradients
             optimizer.zero_grad()
             data = data.to(device)
@@ -91,7 +92,7 @@ class ConvGRU1DTest(unittest.TestCase):
             error.backward()
             optimizer.step()
             if index % 100 == 0:
-                print("Step {0} / 2000 - MSError is {1}".format(index, 
+                print("Step {0} / 1000 - MSError is {1}".format(index, 
                                                                 error.item()))
         # Make sure the weights have changed
         weights_ih_af_train = cgru1d.conv_ih.weight.data.cpu().clone()
@@ -102,5 +103,5 @@ class ConvGRU1DTest(unittest.TestCase):
         self.assertIs(
             bool(torch.all(torch.eq(weights_hh_bf_train, weights_hh_af_train))), 
             False)
-        # Check the final error is low
-        self.assertLessEqual(error.item(), 10**(-4))
+        # Check the final error is low enough
+        self.assertLessEqual(error.item(), 2*10**(-3))
