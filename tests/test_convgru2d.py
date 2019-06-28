@@ -52,9 +52,9 @@ class ConvGRU2DTest(unittest.TestCase):
         # Data preparation
         # ----------------------------------------------------------------------
         channels = 8
-        kernel_size = (3, 3)
-        padding = (1, 1)
-        stride = (1, 1)
+        kernel_size = 3
+        padding = 1
+        stride = 1
         batch_size = 10
         time_steps = 32
         features = (32, 32)
@@ -77,11 +77,12 @@ class ConvGRU2DTest(unittest.TestCase):
         # ----------------------------------------------------------------------
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         cgru2d.to(device)
+        data = data.to(device)
+        target = target.to(device)
         # Run a basic training procedure
         for index in range(1000):
             # Reset the gradients
             optimizer.zero_grad()
-            data = data.to(device)
             # Loop over the time steps
             output = []
             hx = None

@@ -74,11 +74,12 @@ class ConvGRU1DTest(unittest.TestCase):
         # ----------------------------------------------------------------------
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         cgru1d.to(device)
+        data = data.to(device)
+        target = target.to(device)
         # Run a basic training procedure
         for index in range(1000):
             # Reset the gradients
             optimizer.zero_grad()
-            data = data.to(device)
             # Loop over the time steps
             output = []
             hx = None
