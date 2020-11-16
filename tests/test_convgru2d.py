@@ -1,6 +1,7 @@
 import unittest
 import torch
 from convgru import ConvGRU2DCell
+from rnn_wrapper import RNNWrapper
 
 
 class ConvGRU2DTest(unittest.TestCase):
@@ -68,32 +69,27 @@ class ConvGRU2DTest(unittest.TestCase):
         # ----------------------------------------------------------------------
         # Instantiate model for training
         # ----------------------------------------------------------------------
-        cgru2d = ConvGRU2DCell(
+        cgru2d_cell = ConvGRU2DCell(
             channels, channels, kernel_size, stride=stride, padding=padding
         )
-        optimizer = torch.optim.RMSprop(cgru2d.parameters(), 0.001)
+        cgru = RNNWrapper(cgru2d_cell)
+        optimizer = torch.optim.RMSprop(cgru.parameters(), 0.001)
         loss = torch.nn.MSELoss()
-        weights_ih_bf_train = cgru2d.weight_ih.data.clone()
-        weights_hh_bf_train = cgru2d.weight_hh.data.clone()
+        weights_ih_bf_train = cgru2d_cell.weight_ih.data.clone()
+        weights_hh_bf_train = cgru2d_cell.weight_hh.data.clone()
         # ----------------------------------------------------------------------
         # Train the model and check
         # ----------------------------------------------------------------------
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        cgru2d.to(device)
+        cgru.to(device)
         data = data.to(device)
         target = target.to(device)
         # Run a basic training procedure
         for index in range(500):
             # Reset the gradients
             optimizer.zero_grad()
-            # Loop over the time steps
-            output = []
-            hx = None
-            for step in range(data.size(0)):
-                hx = cgru2d(data[step], hx)
-                output.append(hx)
-            # Reshape the output appropriately
-            output = torch.cat(output, 0).view(data.size(0), *output[0].size())
+            # Run the RNN wrapped convgru cell
+            output = cgru(data)
             # Compute the loss and backpropagate
             error = loss(output, target)
             error.backward()
@@ -103,8 +99,8 @@ class ConvGRU2DTest(unittest.TestCase):
                     "Step {0} / 500 - MSError is {1}".format(index, error.item())
                 )
         # Make sure the weights have changed
-        weights_ih_af_train = cgru2d.weight_ih.data.cpu().clone()
-        weights_hh_af_train = cgru2d.weight_hh.data.cpu().clone()
+        weights_ih_af_train = cgru2d_cell.weight_ih.data.cpu().clone()
+        weights_hh_af_train = cgru2d_cell.weight_hh.data.cpu().clone()
         self.assertIs(
             bool(torch.all(torch.eq(weights_ih_bf_train, weights_ih_af_train))),
             False,
