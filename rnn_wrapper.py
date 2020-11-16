@@ -27,10 +27,9 @@ class RNNWrapper(nn.Module):
                 the input tensor and the hidden state and returns a new hidden
                 state]
             truncation_steps (int, optional): [The maximum number of timesteps
-                to include in the backpropagation graph which to detach the
-                hidden state from the graph. This can help speed up runtime on
-                CPU and avoid vanishing gradient problems, however it is mostly
-                useful for very long sequences]. Defaults to None.
+                to include in the backpropagation graph. This can help speed up 
+                runtime on CPU and avoid vanishing gradient problems, however 
+                it is mostly useful for very long sequences]. Defaults to None.
         """
         super(RNNWrapper, self).__init__()
 
