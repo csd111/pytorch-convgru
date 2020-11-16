@@ -128,10 +128,10 @@ class ConvGRU2DCell(nn.Module):
         self,
         input_channels: int,
         hidden_channels: int,
-        kernel_size: Union[int, Tuple[int]],
-        stride: Union[int, Tuple[int]] = (1, 1),
-        padding: Union[int, Tuple[int]] = (0, 0),
-        recurrent_kernel_size: Union[int, Tuple[int]] = (3, 3),
+        kernel_size: Union[int, Tuple[int, int]],
+        stride: Union[int, Tuple[int, int]] = (1, 1),
+        padding: Union[int, Tuple[int, int]] = (0, 0),
+        recurrent_kernel_size: Union[int, Tuple[int, int]] = (3, 3),
     ):
         """
         Two-Dimensional Convolutional Gated Recurrent Unit (ConvGRU2D) cell.

@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.init as init
-import torch.nn.functional as functional
-from typing import Union
 
 
 class RNNWrapper(nn.Module):
@@ -19,10 +16,11 @@ class RNNWrapper(nn.Module):
         are directly compatible with the given rnn cell.
 
         Implements a very basic truncated backpropagation through time
-        corresponding to the case k1=k2, see 'An Efficient Gradient-Based
-        Algorithm for On-Line Training of Recurrent Network Trajectories',
+        corresponding to the case k1=k2 (see 'An Efficient Gradient-Based
+        Algorithm for On-Line Training of Recurrent Network Trajectories',
         Ronald J. Williams and Jing Pen, Neural Computation, vol. 2,
-        pp. 490-501, 1990.
+        pp. 490-501, 1990).
+
 
         Args:
             rnn_cell (nn.Module): [The torch module that takes one timestep of
@@ -30,7 +28,9 @@ class RNNWrapper(nn.Module):
                 state]
             truncation_steps (int, optional): [The maximum number of timesteps
                 to include in the backpropagation graph which to detach the
-                hidden state from the graph]. Defaults to None.
+                hidden state from the graph. This can help speed up runtime on
+                CPU and avoid vanishing gradient problems, however it is mostly
+                useful for very long sequences]. Defaults to None.
         """
         super(RNNWrapper, self).__init__()
 
