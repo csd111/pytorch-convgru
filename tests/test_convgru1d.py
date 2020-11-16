@@ -99,9 +99,7 @@ class ConvGRU1DTest(unittest.TestCase):
             optimizer.step()
             if index % 100 == 0:
                 print(
-                    "Step {0} / 500 - MSError is {1}".format(
-                        index, error.item()
-                    )
+                    "Step {0} / 500 - MSError is {1}".format(index, error.item())
                 )
         # Make sure the weights have changed
         weights_ih_af_train = cgru1d.weight_ih.data.cpu().clone()

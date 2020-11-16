@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as functional
-from typing import Union
+from typing import Union, List, Tuple
 
 # ------------------------------------------------------------------------------
 # One-dimensional Convolution Gated Recurrent Unit
@@ -112,6 +112,7 @@ class ConvGRU1DCell(nn.Module):
             self.padding_hh,
         )
 
+
 # ------------------------------------------------------------------------------
 # Two-dimensional Convolution Gated Recurrent Unit
 # ------------------------------------------------------------------------------
@@ -127,10 +128,10 @@ class ConvGRU2DCell(nn.Module):
         self,
         input_channels: int,
         hidden_channels: int,
-        kernel_size: Union[int, tuple],
-        stride: Union[int, tuple] = (1, 1),
-        padding: Union[int, tuple] = (0, 0),
-        recurrent_kernel_size: Union[int, tuple] = (3, 3),
+        kernel_size: Union[int, Tuple[int]],
+        stride: Union[int, Tuple[int]] = (1, 1),
+        padding: Union[int, Tuple[int]] = (0, 0),
+        recurrent_kernel_size: Union[int, Tuple[int]] = (3, 3),
     ):
         """
         Two-Dimensional Convolutional Gated Recurrent Unit (ConvGRU2D) cell.
@@ -160,35 +161,60 @@ class ConvGRU2DCell(nn.Module):
                                                      (default: {(3, 3)})
         """
         super(ConvGRU2DCell, self).__init__()
-
-        hh_padding = (
+        # ----------------------------------------------------------------------
+        # Handle int to tuple conversion
+        if isinstance(recurrent_kernel_size, int):
+            recurrent_kernel_size = (recurrent_kernel_size,) * 2
+        if isinstance(kernel_size, int):
+            kernel_size = (kernel_size,) * 2
+        if isinstance(stride, int):
+            stride = (stride,) * 2
+        if isinstance(padding, int):
+            padding = (padding,) * 2
+        # ----------------------------------------------------------------------
+        # Save input parameters for later
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.h_channels = hidden_channels
+        self.padding_ih = padding
+        self.padding_hh = (
             recurrent_kernel_size[0] // 2,
             recurrent_kernel_size[1] // 2,
         )
-
-        self.conv_ih = nn.Conv2d(
-            input_channels,
-            hidden_channels * 3,
-            kernel_size,
-            stride=stride,
-            padding=padding,
+        # ----------------------------------------------------------------------
+        # Initialize the convolution kernels
+        self.weight_ih = nn.Parameter(
+            torch.ones(
+                hidden_channels * 3,
+                input_channels,
+                kernel_size[0],
+                kernel_size[1],
+            ),
+            requires_grad=True,
         )
-        self.conv_hh = nn.Conv2d(
-            hidden_channels,
-            hidden_channels * 3,
-            recurrent_kernel_size,
-            stride=1,
-            padding=hh_padding,
+        self.weight_hh = nn.Parameter(
+            torch.ones(
+                hidden_channels * 3,
+                input_channels,
+                recurrent_kernel_size[0],
+                recurrent_kernel_size[1],
+            ),
+            requires_grad=True,
         )
-        self.h_channels = hidden_channels
-
+        self.bias_ih = nn.Parameter(
+            torch.zeros(hidden_channels * 3), requires_grad=True
+        )
+        self.bias_hh = nn.Parameter(
+            torch.zeros(hidden_channels * 3), requires_grad=True
+        )
+        # ----------------------------------------------------------------------
         self.reset_parameters()
 
     def reset_parameters(self):
-        init.orthogonal_(self.conv_hh.weight)
-        init.xavier_uniform_(self.conv_ih.weight)
-        init.zeros_(self.conv_hh.bias)
-        init.zeros_(self.conv_ih.bias)
+        init.orthogonal_(self.weight_hh)
+        init.xavier_uniform_(self.weight_ih)
+        init.zeros_(self.bias_hh)
+        init.zeros_(self.bias_ih)
 
     # --------------------------------------------------------------------------
     # Processing
@@ -197,21 +223,13 @@ class ConvGRU2DCell(nn.Module):
     def forward(self, input, hx=None):
         output_size = (
             int(
-                (
-                    input.size(-2)
-                    - self.conv_ih.kernel_size[0]
-                    + 2 * self.conv_ih.padding[0]
-                )
-                / self.conv_ih.stride[0]
+                (input.size(-2) - self.kernel_size[0] + 2 * self.padding_ih[0])
+                / self.stride[0]
             )
             + 1,
             int(
-                (
-                    input.size(-1)
-                    - self.conv_ih.kernel_size[1]
-                    + 2 * self.conv_ih.padding[1]
-                )
-                / self.conv_ih.stride[1]
+                (input.size(-1) - self.kernel_size[1] + 2 * self.padding_ih[1])
+                / self.stride[1]
             )
             + 1,
         )
@@ -220,23 +238,20 @@ class ConvGRU2DCell(nn.Module):
             hx = torch.zeros(
                 input.size(0), self.h_channels, *output_size, device=input.device
             )
-        #  Run the input->hidden and hidden->hidden convolution kernels
-        ih_conv_output = self.conv_ih(input)
-        hh_conv_output = self.conv_hh(hx)
-        # Separate the results and apply Gated Recurrent Unit equations
-        z = torch.sigmoid(
-            ih_conv_output[:, : self.h_channels, :, :]
-            + hh_conv_output[:, : self.h_channels, :, :]
+        # Run the optimized convgru-cell
+        return _opt_convgrucell_2d(
+            input,
+            hx,
+            self.h_channels,
+            self.weight_ih,
+            self.weight_hh,
+            self.bias_ih,
+            self.bias_hh,
+            self.stride,
+            self.padding_ih,
+            self.padding_hh,
         )
-        r = torch.sigmoid(
-            ih_conv_output[:, self.h_channels : 2 * self.h_channels, :, :]
-            + hh_conv_output[:, self.h_channels : 2 * self.h_channels, :, :]
-        )
-        n = torch.tanh(
-            ih_conv_output[:, 2 * self.h_channels :, :, :]
-            + r * hh_conv_output[:, 2 * self.h_channels :, :, :]
-        )
-        return (1 - z) * n + z * hx
+
 
 # --------------------------------------------------------------------------
 # Torchscript optimized cell functions
@@ -273,11 +288,42 @@ def _opt_convgrucell_1d(
     )
     output = _opt_cell_end(
         hidden,
-        ih_output[:, :channels, :],
-        hh_output[:, :channels, :],
-        ih_output[:, channels : 2 * channels, :],
-        hh_output[:, channels : 2 * channels, :],
-        ih_output[:, 2 * channels :, :],
-        hh_output[:, 2 * channels :, :],
+        torch.narrow(ih_output, 1, 0, channels),
+        torch.narrow(hh_output, 1, 0, channels),
+        torch.narrow(ih_output, 1, channels, channels),
+        torch.narrow(hh_output, 1, channels, channels),
+        torch.narrow(ih_output, 1, 2 * channels, channels),
+        torch.narrow(hh_output, 1, 2 * channels, channels),
+    )
+    return output
+
+
+@torch.jit.script
+def _opt_convgrucell_2d(
+    inputs,
+    hidden,
+    channels: int,
+    w_ih,
+    w_hh,
+    b_ih,
+    b_hh,
+    stride: List[int],
+    pad1: List[int],
+    pad2: List[int],
+):
+    ih_output = functional.conv2d(
+        inputs, w_ih, bias=b_ih, stride=stride, padding=pad1
+    )
+    hh_output = functional.conv2d(
+        hidden, w_hh, bias=b_hh, stride=1, padding=pad2
+    )
+    output = _opt_cell_end(
+        hidden,
+        torch.narrow(ih_output, 1, 0, channels),
+        torch.narrow(hh_output, 1, 0, channels),
+        torch.narrow(ih_output, 1, channels, channels),
+        torch.narrow(hh_output, 1, channels, channels),
+        torch.narrow(ih_output, 1, 2 * channels, channels),
+        torch.narrow(hh_output, 1, 2 * channels, channels),
     )
     return output
