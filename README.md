@@ -5,7 +5,7 @@ It features a grouping of the input-to-hidden and hidden-to-hidden
 kernels as in the cuDNN implementation of GRUs, plus some torchscript optmizations
 and a basic RNN wrapper with simplified truncated backpropagation through time.
 
-###Usage
+### Usage
 
 See unit tests for basic usage
 ```
